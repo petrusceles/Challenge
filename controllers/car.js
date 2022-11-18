@@ -1,7 +1,7 @@
 // const express = require('express');
 // const {Op} = require('sequelize');
 const {Car, Size, CarPicture} = require('../models')
-const acceptedQueries = ['name','price','size'];
+const acceptedQueries = ['name','price','sizeId'];
 const cloudinary = require('../config/cloudinary')
 
 function uploadToCloudinary(image) {
@@ -25,8 +25,8 @@ function destroyCloudinaryFile(publicId) {
 module.exports = {
     create: async (req,res) => {
         try {
-            let {name,price,size} = req.body;
-            if (!name || !price || !size || !req.file) {
+            let {name,price,sizeId} = req.body;
+            if (!name || !price || !sizeId || !req.file) {
                 return res.status(400).json({
                     status:"BAD_REQUEST",
                     message:"all fields must not be empty",
@@ -34,7 +34,7 @@ module.exports = {
                 })
             }
             // price = parseInt(price)
-            console.log(typeof size)
+            console.log(typeof sizeId)
             const isCarExist = await Car.findOne({
                 where: {
                     name
@@ -51,7 +51,7 @@ module.exports = {
 
             const isSizeExist = await Size.findOne({
                 where: {
-                    id:size
+                    id:sizeId
                 }
             })
 
@@ -62,11 +62,8 @@ module.exports = {
                     data:{}
                 })
             }
-            const fileToUpload = req.file;
-            const fileBase64 = fileToUpload.buffer.toString("base64");
-            const file = `data:${fileToUpload.mimetype};base64,${fileBase64}`;
-            const fileResponse = await uploadToCloudinary(file);
-            console.log(fileResponse.public_id)
+            const fileResponse = await uploadToCloudinary(req.fileEncoded);
+            // console.log(fileResponse.public_id)
             const carPicture = await CarPicture.create({
                 url:fileResponse.url,
                 publicId:fileResponse.public_id
@@ -75,8 +72,8 @@ module.exports = {
             
             const newCar = await Car.create({
                 name,
-                price:parseInt(price),
-                sizeId:parseInt(size),
+                price,
+                sizeId,
                 pictureId:carPicture.dataValues.id
             })
             
@@ -103,6 +100,8 @@ module.exports = {
                     })
                 }
             }
+            // let query = req.query;
+            // query.sizeId = parseInt(query.sizeId)
 
             const cars = await Car.findAll({
                 where:req.query,
@@ -162,7 +161,7 @@ module.exports = {
     update: async (req,res) => {
         try {
             const {id} = req.params;
-            const {name,price,size} = req.body;
+            const {name,price,sizeId} = req.body;
             const car = await Car.findOne({
                 where:{
                     id
@@ -175,6 +174,20 @@ module.exports = {
                     as:"size"
                 }]
             })
+            if (name) {
+                const isCarNameExist = await Car.findOne({
+                    where: {
+                        name
+                    }
+                });
+                if (isCarNameExist) {
+                    return res.status(400).json({
+                        status:"BAD_REQUEST",
+                        message:`car with name ${name} is already exist`,
+                        data:{}
+                    })
+                }
+            }
 
 
             if (!car) {
@@ -185,11 +198,8 @@ module.exports = {
                 })
             }
             let fileResponse;
-            if (req.file) {
-                const fileToUpload = req.file;
-                const fileBase64 = fileToUpload.buffer.toString("base64");
-                const file = `data:${fileToUpload.mimetype};base64,${fileBase64}`;
-                fileResponse = await uploadToCloudinary(file);
+            if (req.fileEncoded) {
+                fileResponse = await uploadToCloudinary(req.fileEncoded);
             }
 
             // console.log(fileResponse)
@@ -207,7 +217,7 @@ module.exports = {
             const updatedCar = await Car.update({
                 name,
                 price,
-                sizeId:size,
+                sizeId,
                 pictureId:carPictureId
             },{
                 where: {
@@ -237,7 +247,7 @@ module.exports = {
                 }
             })
 
-            if (!id) {
+            if (!deleted) {
                 return res.status(404).json({
                     status:"NOT_FOUND",
                     message:'car not found',
